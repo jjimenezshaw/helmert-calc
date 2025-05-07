@@ -49,7 +49,7 @@ def geographic_to_geocentric(ellpsoid, llhs):
         "+proj=pipeline "
         "+step +proj=axisswap +order=2,1 "
         "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
-        f"+step +proj=cart +ellps={ellpsoid["name"]}"
+        f"+step +proj=cart +ellps={ellpsoid['name']}"
     )
     tr = pyproj.transformer.Transformer.from_pipeline(pipeline)
     res = []
@@ -104,11 +104,11 @@ def make_pipeline(pipe, ellps_s_str, ellps_t_str, is2D=False):
         "+proj=pipeline "
         " +step +proj=axisswap +order=2,1 "
         " +step +proj=unitconvert +xy_in=deg +xy_out=rad "
-        f" {"+step +proj=push +v_3" if is2D else ""} "
+        f" {'+step +proj=push +v_3' if is2D else ''} "
         f" +step +proj=cart {ellps_s_str} "
         f" {pipe} "
         f" +step +inv +proj=cart {ellps_t_str} "
-        f" {"+step +proj=pop +v_3" if is2D else ""} "
+        f" {'+step +proj=pop +v_3' if is2D else ''} "
         " +step +proj=unitconvert +xy_in=rad +xy_out=deg "
         " +step +proj=axisswap +order=2,1"
     )
@@ -122,10 +122,10 @@ def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t):
     pipe = f"+step +proj=helmert +x={x:.3f} +y={y:.3f} +z={z:.3f} +rx={rx:.4f} +ry={ry:.4f} +rz={rz:.4f} +s={s:.3f} +convention=position_vector"
     helmert["string"] = pipe
     helmert["pipeline_2D"] = make_pipeline(
-        pipe, f"+ellps={ellps_s["name"]}", f"+ellps={ellps_t["name"]}", True
+        pipe, f"+ellps={ellps_s['name']}", f"+ellps={ellps_t['name']}", True
     )
     helmert["pipeline_3D"] = make_pipeline(
-        pipe, f"+ellps={ellps_s["name"]}", f"+ellps={ellps_t["name"]}", False
+        pipe, f"+ellps={ellps_s['name']}", f"+ellps={ellps_t['name']}", False
     )
     return sol
 
