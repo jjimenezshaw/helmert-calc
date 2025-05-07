@@ -45,11 +45,12 @@ def umeyama(X, Y):
 
 
 def geographic_to_geocentric(ellpsoid, llhs):
+    # @Javier: is it save to use the custom +a and +rf values?
     pipeline = (
         "+proj=pipeline "
         "+step +proj=axisswap +order=2,1 "
         "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
-        f"+step +proj=cart +ellps={ellpsoid["name"]}"
+        f"+step +proj=cart {build_ellipsoid_parameters(ellpsoid)}"
     )
     tr = pyproj.transformer.Transformer.from_pipeline(pipeline)
     res = []
@@ -60,6 +61,8 @@ def geographic_to_geocentric(ellpsoid, llhs):
 
 def read_ellipsoid(ellip):
     # Check if ellipsoid has +a and +rf defined, if not read from proj list
+    # Include custom: boolean to determine in the pipeline if "+a and +rf" 
+    # or +ellps parameter is to be used
     el = None
     if "a" not in ellip or "rf" not in ellip:
         print(f"Reading ellipsoid {ellip['name']} from pyproj")
@@ -75,6 +78,7 @@ def read_ellipsoid(ellip):
                 "name": ellip["name"],
                 "semi_major_axis": el_in_map["a"],
                 "inverse_flattening": el_in_map["rf"],
+                "custom": False
             }
             return el
     # no lookup necessary -> return user defined variables
@@ -83,7 +87,8 @@ def read_ellipsoid(ellip):
             "type": "Ellipsoid",
             "name": ellip["name"],
             "semi_major_axis": ellip["a"],
-            "inverse_flattening": ellip["rf"]
+            "inverse_flattening": ellip["rf"],            
+            "custom": True
         }
 
 
@@ -126,6 +131,11 @@ def make_pipeline(pipe, ellps_s_str, ellps_t_str, is2D=False):
     )
     return p
 
+def build_ellipsoid_parameters(ellipsoid):
+    if ellipsoid['custom']:
+        return f"+a={ellipsoid['semi_major_axis']} +rf={ellipsoid['inverse_flattening']}"
+    else:
+        return f"+ellps={ellipsoid['name']}"
 
 def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t):
     sol = {}
@@ -134,10 +144,10 @@ def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t):
     pipe = f"+step +proj=helmert +x={x:.3f} +y={y:.3f} +z={z:.3f} +rx={rx:.4f} +ry={ry:.4f} +rz={rz:.4f} +s={s:.3f} +convention=position_vector"
     helmert["string"] = pipe
     helmert["pipeline_2D"] = make_pipeline(
-        pipe, f"+ellps={ellps_s["name"]}", f"+ellps={ellps_t["name"]}", True
+        pipe, build_ellipsoid_parameters(ellps_s), build_ellipsoid_parameters(ellps_t), True
     )
     helmert["pipeline_3D"] = make_pipeline(
-        pipe, f"+ellps={ellps_s["name"]}", f"+ellps={ellps_t["name"]}", False
+        pipe, build_ellipsoid_parameters(ellps_s), build_ellipsoid_parameters(ellps_t), False
     )
     return sol
 
