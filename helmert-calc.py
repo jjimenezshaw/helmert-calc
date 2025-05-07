@@ -59,20 +59,32 @@ def geographic_to_geocentric(ellpsoid, llhs):
 
 
 def read_ellipsoid(ellip):
-    # https://proj.org/en/stable/usage/ellipsoids.html#ellipsoids
-    ellps = pyproj.list.get_ellps_map()
-    print(ellps)
-    e = pyproj.crs.Ellipsoid.from_name("WGS 84")
-    print(e.to_json(True))
-    if ellip["name"] in ellps.keys():
-        el_in_map = ellps[ellip["name"]]
-        el = {
+    # Check if ellipsoid has +a and +rf defined, if not read from proj list
+    el = None
+    if "a" not in ellip or "rf" not in ellip:
+        print(f"Reading ellipsoid {ellip['name']} from pyproj")
+        # https://proj.org/en/stable/usage/ellipsoids.html#ellipsoids
+        ellps = pyproj.list.get_ellps_map()
+        # @Javier: could be removed?
+        # e = pyproj.crs.Ellipsoid.from_name("WGS 84")
+        # print(e.to_json(True))
+        if ellip["name"] in ellps.keys():
+            el_in_map = ellps[ellip["name"]]
+            el = {
+                "type": "Ellipsoid",
+                "name": ellip["name"],
+                "semi_major_axis": el_in_map["a"],
+                "inverse_flattening": el_in_map["rf"],
+            }
+            return el
+    # no lookup necessary -> return user defined variables
+    else:
+        return {
             "type": "Ellipsoid",
             "name": ellip["name"],
-            "semi_major_axis": el_in_map["a"],
-            "inverse_flattening": el_in_map["rf"],
+            "semi_major_axis": ellip["a"],
+            "inverse_flattening": ellip["rf"]
         }
-        return el
 
 
 def solve_helmert(geoc_s, geoc_t):
