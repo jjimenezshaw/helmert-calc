@@ -121,11 +121,11 @@ def make_pipeline(pipe, ellps_s_str, ellps_t_str, is2D=False):
         "+proj=pipeline "
         " +step +proj=axisswap +order=2,1 "
         " +step +proj=unitconvert +xy_in=deg +xy_out=rad "
-        f" {"+step +proj=push +v_3" if is2D else ""} "
+        f" {'+step +proj=push +v_3' if is2D else ''} "
         f" +step +proj=cart {ellps_s_str} "
         f" {pipe} "
         f" +step +inv +proj=cart {ellps_t_str} "
-        f" {"+step +proj=pop +v_3" if is2D else ""} "
+        f" {'+step +proj=pop +v_3' if is2D else ''} "
         " +step +proj=unitconvert +xy_in=rad +xy_out=deg "
         " +step +proj=axisswap +order=2,1"
     )
