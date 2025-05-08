@@ -1,7 +1,9 @@
 {
     "source": {
         "ellipsoid": {
-            "name": "bessel"
+            "name": "mueffling_1821",
+            "a": 6376938,
+            "rf": 310
         },
         "points": [
             [
