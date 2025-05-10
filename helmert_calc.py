@@ -45,48 +45,6 @@ def umeyama(X, Y):
     return c, R, t
 
 
-def geographic_to_geocentric(ellpsoid, llhs):
-    pipeline = (
-        "+proj=pipeline "
-        "+step +proj=axisswap +order=2,1 "
-        "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
-        f"+step +proj=cart {build_ellipsoid_parameters(ellpsoid)}"
-    )
-    tr = pyproj.transformer.Transformer.from_pipeline(pipeline)
-    res = []
-    for llh in llhs:
-        res.append(np.array(tr.transform(*llh)))
-    return np.array(res)
-
-
-def read_ellipsoid(ellip):
-    # Check if ellipsoid has +a and +rf defined, if not read from proj list
-    # Include custom: boolean to determine in the pipeline if "+a and +rf"
-    # or +ellps parameter is to be used
-    el = None
-    if "a" not in ellip or "rf" not in ellip:
-        print(f"Reading ellipsoid {ellip['name']} from pyproj")
-        # https://proj.org/en/stable/usage/ellipsoids.html#ellipsoids
-        ellps = pyproj.list.get_ellps_map()
-        if ellip["name"] in ellps.keys():
-            el_in_map = ellps[ellip["name"]]
-            el = {
-                "name": ellip["name"],
-                "a": el_in_map["a"],
-                "rf": el_in_map["rf"],
-                "custom": False,
-            }
-            return el
-    # no lookup necessary -> return user defined variables
-    else:
-        return {
-            "name": ellip["name"],
-            "a": ellip["a"],
-            "rf": ellip["rf"],
-            "custom": True,
-        }
-
-
 def solve_helmert(geoc_s, geoc_t):
     def arrange(p):
         r = []
@@ -109,12 +67,49 @@ def solve_helmert(geoc_s, geoc_t):
     return (x, y, z, rx, ry, rz, s)
 
 
-def make_pipeline(pipe, ellps_s, ellps_t, pm_s, pm_t, is2D=False):
-    pm_s_str = f"+step +inv +proj=longlat +pm={pm_s}" if pm_s else ""
-    pm_t_str = f"+step +proj=longlat +pm={pm_t}" if pm_t else ""
-    ellps_s_str = build_ellipsoid_parameters(ellps_s)
-    ellps_t_str = build_ellipsoid_parameters(ellps_t)
+def geographic_to_geocentric(ellipsoid_str, llhs):
+    pipeline = (
+        "+proj=pipeline "
+        "+step +proj=axisswap +order=2,1 "
+        "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
+        f"+step +proj=cart {ellipsoid_str}"
+    )
+    tr = pyproj.transformer.Transformer.from_pipeline(pipeline)
+    res = []
+    for llh in llhs:
+        res.append(np.array(tr.transform(*llh)))
+    return np.array(res)
 
+
+def _read_ellipsoid(ellip):
+    # Check if ellipsoid has +a and +rf defined, if not read from proj list
+    # Include custom: boolean to determine in the pipeline if "+a and +rf"
+    # or +ellps parameter is to be used
+    el = None
+    if "a" not in ellip or "rf" not in ellip:
+        # print(f"Reading ellipsoid {ellip['name']} from pyproj")
+        # https://proj.org/en/stable/usage/ellipsoids.html#ellipsoids
+        ellps = pyproj.list.get_ellps_map()
+        if ellip["name"] in ellps.keys():
+            el_in_map = ellps[ellip["name"]]
+            el = {
+                "name": ellip["name"],
+                "a": el_in_map["a"],
+                "rf": el_in_map["rf"],
+                "custom": False,
+            }
+            return el
+    # no lookup necessary -> return user defined variables
+    else:
+        return {
+            "name": ellip["name"],
+            "a": ellip["a"],
+            "rf": ellip["rf"],
+            "custom": True,
+        }
+
+
+def _make_pipeline(pipe, ellps_s_str, ellps_t_str, pm_s_str, pm_t_str, is2D=False):
     p = (
         "+proj=pipeline "
         " +step +proj=axisswap +order=2,1 "
@@ -132,14 +127,14 @@ def make_pipeline(pipe, ellps_s, ellps_t, pm_s, pm_t, is2D=False):
     return p
 
 
-def build_ellipsoid_parameters(ellipsoid):
+def _build_ellipsoid_parameters(ellipsoid):
     if ellipsoid["custom"]:
         return f"+a={ellipsoid['a']} +rf={ellipsoid['rf']}"
     else:
         return f"+ellps={ellipsoid['name']}"
 
 
-def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t, pm_s, pm_t):
+def _make_solution(x, y, z, rx, ry, rz, s, ellps_s_str, ellps_t_str, pm_s, pm_t):
     sol = {}
     helmert = sol["helmert"] = {}
     helmert["params"] = {"x": x, "y": y, "z": z, "rx": rx, "ry": ry, "rz": rz, "s": s}
@@ -149,32 +144,36 @@ def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t, pm_s, pm_t):
         f"+rx={rx:.4f} +ry={ry:.4f} +rz={rz:.4f} "
         f"+s={s:.3f} +convention=position_vector"
     )
+
+    pm_s_str = f"+step +inv +proj=longlat +pm={pm_s}" if pm_s else ""
+    pm_t_str = f"+step +proj=longlat +pm={pm_t}" if pm_t else ""
+
     helmert["string"] = pipe
-    helmert["pipeline_2D"] = make_pipeline(
+    helmert["pipeline_2D"] = _make_pipeline(
         pipe,
-        ellps_s,
-        ellps_t,
-        pm_s,
-        pm_t,
+        ellps_s_str,
+        ellps_t_str,
+        pm_s_str,
+        pm_t_str,
         True,
     )
-    helmert["pipeline_3D"] = make_pipeline(
+    helmert["pipeline_3D"] = _make_pipeline(
         pipe,
-        ellps_s,
-        ellps_t,
-        pm_s,
-        pm_t,
+        ellps_s_str,
+        ellps_t_str,
+        pm_s_str,
+        pm_t_str,
         False,
     )
     return sol
 
 
-def pm_correction(points, pm):
+def _pm_correction(points, pm):
     if pm:
         pipeline = (
             "+proj=pipeline "
             "+step +proj=axisswap +order=2,1 "
-            f"+step +inv +proj=longlat +ellps=bessel +pm={pm} "
+            f"+step +inv +proj=longlat +pm={pm} "
             "+step +proj=axisswap +order=2,1 "
         )
     else:
@@ -187,24 +186,30 @@ def pm_correction(points, pm):
     return np.array(res)
 
 
+def _read_input(obj):
+    ellps = _read_ellipsoid(obj["ellipsoid"])
+    pm = obj.get("pm")
+    points = _pm_correction(obj["points"], pm)
+    ellipsoid_str = _build_ellipsoid_parameters(ellps)
+    geoc = geographic_to_geocentric(ellipsoid_str, points)
+    return ellipsoid_str, pm, geoc
+
+
 def helmert_calc(input):
-    ellps_s = read_ellipsoid(input["source"]["ellipsoid"])
-    ellps_t = read_ellipsoid(input["target"]["ellipsoid"])
-    pm_s = input["source"].get("pm")
-    pm_t = input["target"].get("pm")
-    points_s = pm_correction(input["source"]["points"], pm_s)
-    points_t = pm_correction(input["target"]["points"], pm_t)
-    geoc_s = geographic_to_geocentric(ellps_s, points_s)
-    geoc_t = geographic_to_geocentric(ellps_t, points_t)
-    # print(geoc_s, geoc_t)
+    ellps_s, pm_s, geoc_s = _read_input(input["source"])
+    ellps_t, pm_t, geoc_t = _read_input(input["target"])
     hlmrt = solve_helmert(geoc_s, geoc_t)
-    sol = make_solution(*hlmrt, ellps_s, ellps_t, pm_s, pm_t)
+
+    sol = _make_solution(*hlmrt, ellps_s, ellps_t, pm_s, pm_t)
     return sol
 
 
-def main(input_filename, output_filename):
+def main(input_filename, output_filename, inverse):
     with open(input_filename) as input_f:
         input = json.load(input_f)
+
+    if inverse:
+        input["source"], input["target"] = input["target"], input["source"]
 
     solution = helmert_calc(input)
     print(solution)
@@ -218,11 +223,14 @@ def main(input_filename, output_filename):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate Helmert parameters.")
     parser.add_argument(
-        "-input", "-i", type=str, help="file path for input values as JSON"
+        "--input", "-i", type=str, help="file path for input values as JSON"
     )
     parser.add_argument(
-        "-output", "-o", type=str, help="file path for output values as JSON"
+        "--output", "-o", type=str, help="file path for output values as JSON"
+    )
+    parser.add_argument(
+        "--inverse", default=False, action=argparse.BooleanOptionalAction
     )
     args = parser.parse_args()
 
-    main(args.input, args.output)
+    main(args.input, args.output, args.inverse)
