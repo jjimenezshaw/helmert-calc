@@ -46,7 +46,6 @@ def umeyama(X, Y):
 
 
 def geographic_to_geocentric(ellpsoid, llhs):
-    # @Javier: is it save to use the custom +a and +rf values?
     pipeline = (
         "+proj=pipeline "
         "+step +proj=axisswap +order=2,1 "
@@ -69,39 +68,34 @@ def read_ellipsoid(ellip):
         print(f"Reading ellipsoid {ellip['name']} from pyproj")
         # https://proj.org/en/stable/usage/ellipsoids.html#ellipsoids
         ellps = pyproj.list.get_ellps_map()
-        # @Javier: could be removed?
-        # e = pyproj.crs.Ellipsoid.from_name("WGS 84")
-        # print(e.to_json(True))
         if ellip["name"] in ellps.keys():
             el_in_map = ellps[ellip["name"]]
             el = {
-                "type": "Ellipsoid",
                 "name": ellip["name"],
-                "semi_major_axis": el_in_map["a"],
-                "inverse_flattening": el_in_map["rf"],
+                "a": el_in_map["a"],
+                "rf": el_in_map["rf"],
                 "custom": False,
             }
             return el
     # no lookup necessary -> return user defined variables
     else:
         return {
-            "type": "Ellipsoid",
             "name": ellip["name"],
-            "semi_major_axis": ellip["a"],
-            "inverse_flattening": ellip["rf"],
+            "a": ellip["a"],
+            "rf": ellip["rf"],
             "custom": True,
         }
 
 
 def solve_helmert(geoc_s, geoc_t):
-    def f(p):
+    def arrange(p):
         r = []
         for i in range(0, 3):
             r.append(np.array([x[i] for x in p]))
         return np.array(r)
 
-    src = f(geoc_s)
-    tgt = f(geoc_t)
+    src = arrange(geoc_s)
+    tgt = arrange(geoc_t)
     c, R, t = umeyama(src, tgt)
     # print("\nc", c, "\nR", R, "\nt", t)
     secs = 3600
@@ -115,16 +109,23 @@ def solve_helmert(geoc_s, geoc_t):
     return (x, y, z, rx, ry, rz, s)
 
 
-def make_pipeline(pipe, ellps_s_str, ellps_t_str, is2D=False):
+def make_pipeline(pipe, ellps_s, ellps_t, pm_s, pm_t, is2D=False):
+    pm_s_str = f"+step +inv +proj=longlat +pm={pm_s}" if pm_s else ""
+    pm_t_str = f"+step +proj=longlat +pm={pm_t}" if pm_t else ""
+    ellps_s_str = build_ellipsoid_parameters(ellps_s)
+    ellps_t_str = build_ellipsoid_parameters(ellps_t)
+
     p = (
         "+proj=pipeline "
         " +step +proj=axisswap +order=2,1 "
         " +step +proj=unitconvert +xy_in=deg +xy_out=rad "
+        f" {pm_s_str} "
         f" {'+step +proj=push +v_3' if is2D else ''} "
         f" +step +proj=cart {ellps_s_str} "
         f" {pipe} "
         f" +step +inv +proj=cart {ellps_t_str} "
         f" {'+step +proj=pop +v_3' if is2D else ''} "
+        f" {pm_t_str} "
         " +step +proj=unitconvert +xy_in=rad +xy_out=deg "
         " +step +proj=axisswap +order=2,1"
     )
@@ -133,14 +134,12 @@ def make_pipeline(pipe, ellps_s_str, ellps_t_str, is2D=False):
 
 def build_ellipsoid_parameters(ellipsoid):
     if ellipsoid["custom"]:
-        return (
-            f"+a={ellipsoid['semi_major_axis']} +rf={ellipsoid['inverse_flattening']}"
-        )
+        return f"+a={ellipsoid['a']} +rf={ellipsoid['rf']}"
     else:
         return f"+ellps={ellipsoid['name']}"
 
 
-def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t):
+def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t, pm_s, pm_t):
     sol = {}
     helmert = sol["helmert"] = {}
     helmert["params"] = {"x": x, "y": y, "z": z, "rx": rx, "ry": ry, "rz": rz, "s": s}
@@ -153,16 +152,53 @@ def make_solution(x, y, z, rx, ry, rz, s, ellps_s, ellps_t):
     helmert["string"] = pipe
     helmert["pipeline_2D"] = make_pipeline(
         pipe,
-        build_ellipsoid_parameters(ellps_s),
-        build_ellipsoid_parameters(ellps_t),
+        ellps_s,
+        ellps_t,
+        pm_s,
+        pm_t,
         True,
     )
     helmert["pipeline_3D"] = make_pipeline(
         pipe,
-        build_ellipsoid_parameters(ellps_s),
-        build_ellipsoid_parameters(ellps_t),
+        ellps_s,
+        ellps_t,
+        pm_s,
+        pm_t,
         False,
     )
+    return sol
+
+
+def pm_correction(points, pm):
+    if pm:
+        pipeline = (
+            "+proj=pipeline "
+            "+step +proj=axisswap +order=2,1 "
+            f"+step +inv +proj=longlat +ellps=bessel +pm={pm} "
+            "+step +proj=axisswap +order=2,1 "
+        )
+    else:
+        pipeline = "+proj=noop"
+
+    tr = pyproj.transformer.Transformer.from_pipeline(pipeline)
+    res = []
+    for point in points:
+        res.append(np.array(tr.transform(*point)))
+    return np.array(res)
+
+
+def helmert_calc(input):
+    ellps_s = read_ellipsoid(input["source"]["ellipsoid"])
+    ellps_t = read_ellipsoid(input["target"]["ellipsoid"])
+    pm_s = input["source"].get("pm")
+    pm_t = input["target"].get("pm")
+    points_s = pm_correction(input["source"]["points"], pm_s)
+    points_t = pm_correction(input["target"]["points"], pm_t)
+    geoc_s = geographic_to_geocentric(ellps_s, points_s)
+    geoc_t = geographic_to_geocentric(ellps_t, points_t)
+    # print(geoc_s, geoc_t)
+    hlmrt = solve_helmert(geoc_s, geoc_t)
+    sol = make_solution(*hlmrt, ellps_s, ellps_t, pm_s, pm_t)
     return sol
 
 
@@ -170,17 +206,11 @@ def main(input_filename, output_filename):
     with open(input_filename) as input_f:
         input = json.load(input_f)
 
-    ellps_s = read_ellipsoid(input["source"]["ellipsoid"])
-    ellps_t = read_ellipsoid(input["target"]["ellipsoid"])
-    geoc_s = geographic_to_geocentric(ellps_s, input["source"]["points"])
-    geoc_t = geographic_to_geocentric(ellps_t, input["target"]["points"])
-    # print(geoc_s, geoc_t)
-    hlmrt = solve_helmert(geoc_s, geoc_t)
-    sol = make_solution(*hlmrt, ellps_s, ellps_t)
-    print(sol)
+    solution = helmert_calc(input)
+    print(solution)
 
     res = input
-    res["solution"] = sol
+    res["solution"] = solution
     with open(output_filename, "w") as output_f:
         json.dump(res, output_f, indent=4)
 
@@ -196,14 +226,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.input, args.output)
-    """+proj=pipeline
-  +step +proj=axisswap +order=2,1
-  +step +proj=unitconvert +xy_in=deg +xy_out=rad
-  +step +proj=push +v_3
-  +step +proj=cart +ellps=bessel
-  +step +proj=helmert +x=598.1 +y=73.7 +z=418.2 +rx=0.202 +ry=0.045 +rz=-2.455
-        +s=6.7 +convention=position_vector
-  +step +inv +proj=cart +ellps=GRS80
-  +step +proj=pop +v_3
-  +step +proj=unitconvert +xy_in=rad +xy_out=deg
-  +step +proj=axisswap +order=2,1"""

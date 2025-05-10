@@ -4,7 +4,7 @@ Calculator for Helmert parameters
 
 ## Usage
 
-Run the main script `helmert-calc.py` with input and output variables.
+Run the main script `helmert_calc.py` with input and output variables.
 Points and parameters are defined within a `.json` file.
 Use the `a` and `rf` parameters to define custom ellipsoids.
 See the example file [example-mueffling.json](./example-mueffling.json). The parameters for Müffling 1821 are taken from:
