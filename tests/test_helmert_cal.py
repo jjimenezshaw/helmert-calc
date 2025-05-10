@@ -160,7 +160,7 @@ def test_mgi_ferro_to_etrs89(prime_meridian):
 
 
 @pytest.mark.parametrize("prime_meridian", ["ferro", -17.6666666666])
-def test_mgi_ferro_to_etrs89_inversed(prime_meridian):
+def test_mgi_ferro_to_etrs89_inverted(prime_meridian):
     # https://epsg.org/transformation_1619/MGI-to-ETRS89-1.html
     input = mgi_ferro_to_etrs89()
     input["source"]["pm"] = prime_meridian
