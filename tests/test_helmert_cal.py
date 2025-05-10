@@ -1,5 +1,5 @@
-import pytest
 import pyproj
+import pytest
 
 import helmert_calc as hc
 
