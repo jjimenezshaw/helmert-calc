@@ -48,15 +48,7 @@ def umeyama(X, Y):
 
 
 def solve_helmert(geoc_s, geoc_t):
-    def arrange(p):
-        r = []
-        for i in range(0, 3):
-            r.append(np.array([x[i] for x in p]))
-        return np.array(r)
-
-    src = arrange(geoc_s)
-    tgt = arrange(geoc_t)
-    c, R, t = umeyama(src, tgt)
+    c, R, t = umeyama(np.transpose(geoc_s), np.transpose(geoc_t))
     # print("\nc", c, "\nR", R, "\nt", t)
     secs = 3600
     x = t[0][0]
