@@ -1,9 +1,11 @@
 import math
 import os
+import shlex
+import subprocess
+import tempfile
+
 import pyproj
 import pytest
-import shlex, subprocess
-import tempfile
 
 import helmert_calc as hc
 
@@ -220,16 +222,22 @@ def test_cli():
     assert any("helmert" in str(x.strip()) for x in p.stdout)
     assert p.wait() == 0
 
+
 def test_cli_outfile():
     tmp = tempfile.NamedTemporaryFile(delete=False)
     try:
         dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         runner = os.path.join(dir_path, "helmert_calc.py")
         example = os.path.join(dir_path, "example.json")
-        command = f'python3 "{runner}" --input "{example}" --output "{tmp.name}" --inverse -q'
+        command = (
+            f'python3 "{runner}" --input "{example}" --output "{tmp.name}" --inverse -q'
+        )
         args = shlex.split(command)
         p = subprocess.Popen(
-            args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
         )
         assert p.wait() == 0
     finally:

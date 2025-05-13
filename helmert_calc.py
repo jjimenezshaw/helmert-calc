@@ -225,10 +225,17 @@ if __name__ == "__main__":
         "--output", "-o", type=str, help="file path for output values as JSON"
     )
     parser.add_argument(
-        "--inverse", default=False, action=argparse.BooleanOptionalAction, help="invert source and target"
+        "--inverse",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="invert source and target",
     )
     parser.add_argument(
-        "--quiet", "-q", default=False, action=argparse.BooleanOptionalAction, help="file path for output values as JSON"
+        "--quiet",
+        "-q",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="file path for output values as JSON",
     )
     args = parser.parse_args()
 
