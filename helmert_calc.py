@@ -198,7 +198,7 @@ def helmert_calc(input):
     return sol
 
 
-def main(input_filename, output_filename, inverse):
+def main(input_filename, output_filename, inverse, quiet):
     with open(input_filename) as input_f:
         input = json.load(input_f)
 
@@ -206,12 +206,14 @@ def main(input_filename, output_filename, inverse):
         input["source"], input["target"] = input["target"], input["source"]
 
     solution = helmert_calc(input)
-    print(solution)
+    if not quiet:
+        print(json.dumps(solution, indent=4))
 
-    res = input
-    res["solution"] = solution
-    with open(output_filename, "w") as output_f:
-        json.dump(res, output_f, indent=4)
+    if output_filename:
+        res = input
+        res["solution"] = solution
+        with open(output_filename, "w") as output_f:
+            json.dump(res, output_f, indent=4)
 
 
 if __name__ == "__main__":
@@ -223,8 +225,11 @@ if __name__ == "__main__":
         "--output", "-o", type=str, help="file path for output values as JSON"
     )
     parser.add_argument(
-        "--inverse", default=False, action=argparse.BooleanOptionalAction
+        "--inverse", default=False, action=argparse.BooleanOptionalAction, help="invert source and target"
+    )
+    parser.add_argument(
+        "--quiet", "-q", default=False, action=argparse.BooleanOptionalAction, help="file path for output values as JSON"
     )
     args = parser.parse_args()
 
-    main(args.input, args.output, args.inverse)
+    main(args.input, args.output, args.inverse, args.quiet)

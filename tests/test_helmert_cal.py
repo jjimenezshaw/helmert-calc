@@ -1,6 +1,9 @@
 import math
+import os
 import pyproj
 import pytest
+import shlex, subprocess
+import tempfile
 
 import helmert_calc as hc
 
@@ -76,7 +79,6 @@ def test_mirrored_points():
     sol = hc.helmert_calc(input)
     print(sol)
     assert math.fabs(sol["helmert"]["params"]["s"]) > 1000
-
 
 
 @pytest.mark.parametrize("inverse", [False, True])
@@ -204,3 +206,32 @@ def test_mgi_ferro_to_etrs89_inverted(prime_meridian):
     assert params["ry"] == pytest.approx(-1.474, abs=0.002)
     assert params["rz"] == pytest.approx(-5.297, abs=0.002)
     assert params["s"] == pytest.approx(-2.4232, abs=0.001)
+
+
+def test_cli():
+    dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    runner = os.path.join(dir_path, "helmert_calc.py")
+    example = os.path.join(dir_path, "example.json")
+    command = f'python3 "{runner}" --input "{example}"'
+    args = shlex.split(command)
+    p = subprocess.Popen(
+        args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE
+    )
+    assert any("helmert" in str(x.strip()) for x in p.stdout)
+    assert p.wait() == 0
+
+def test_cli_outfile():
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    try:
+        dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        runner = os.path.join(dir_path, "helmert_calc.py")
+        example = os.path.join(dir_path, "example.json")
+        command = f'python3 "{runner}" --input "{example}" --output "{tmp.name}" --inverse -q'
+        args = shlex.split(command)
+        p = subprocess.Popen(
+            args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE
+        )
+        assert p.wait() == 0
+    finally:
+        tmp.close()
+        os.unlink(tmp.name)

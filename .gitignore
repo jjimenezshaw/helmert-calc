@@ -1,4 +1,5 @@
 .vscode
 __pycache__/
 *.pyc
+.coverage
 *output.json
