@@ -1,3 +1,4 @@
+import math
 import pyproj
 import pytest
 
@@ -58,6 +59,24 @@ def swap(input):
 
 def test_nothing():
     assert True
+
+
+def test_mirrored_points():
+    # the points are not properly paired
+    input = {
+        "source": {
+            "ellipsoid": {"name": "GRS80"},
+            "points": [[53, 8, 0], [52, 13, 0], [50, 12, 0]],
+        },
+        "target": {
+            "ellipsoid": {"name": "GRS80"},
+            "points": [[53, 8, 0], [50, 12, 0], [52, 13, 0]],
+        },
+    }
+    sol = hc.helmert_calc(input)
+    print(sol)
+    assert math.fabs(sol["helmert"]["params"]["s"]) > 1000
+
 
 
 @pytest.mark.parametrize("inverse", [False, True])
