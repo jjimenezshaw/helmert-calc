@@ -189,6 +189,40 @@ def _read_input(obj):
     return ellipsoid_str, pm, geoc
 
 
+def compute_residuals(input, sol):
+    src = np.array(input["source"]["points"])
+    tgt = np.array(input["target"]["points"])
+    center = np.mean(tgt, axis=0)
+
+    ellps = _build_ellipsoid_parameters(_read_ellipsoid(input["target"]["ellipsoid"]))
+    pipeline_tmerc = (
+        "+proj=pipeline +step +proj=axisswap +order=2,1 "
+        "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
+        f"+step +proj=tmerc {ellps} +lat_0={center[0]} +lon_0={center[1]}"
+    )
+    tr_tmerc = pyproj.transformer.Transformer.from_pipeline(pipeline_tmerc)
+
+    def calc_residuals(key):
+        pipeline_to_tgt = sol["helmert"][key]
+        tr_to_tgt = pyproj.transformer.Transformer.from_pipeline(pipeline_to_tgt)
+        converted = [np.array(tr_to_tgt.transform(*p)) for p in src]
+
+        res_1 = [np.array(tr_tmerc.transform(*p)) for p in converted]
+        res_2 = [np.array(tr_tmerc.transform(*p)) for p in tgt]
+
+        residuals = [(r2 - r1).tolist() for r1, r2 in zip(res_1, res_2)]
+        return residuals
+
+    res_2D = [np.linalg.norm(np.array(p[:2])) for p in calc_residuals("pipeline_2D")]
+    res_3D = calc_residuals("pipeline_3D")
+    result = {
+        "pipeline_3D": res_3D,
+        "pipeline_2D": res_2D,
+        "rms_2D": np.sqrt(np.mean(np.square(res_2D))),
+    }
+    return result
+
+
 def helmert_calc(input):
     ellps_s, pm_s, geoc_s = _read_input(input["source"])
     ellps_t, pm_t, geoc_t = _read_input(input["target"])
@@ -206,12 +240,15 @@ def main(input_filename, output_filename, inverse, quiet):
         input["source"], input["target"] = input["target"], input["source"]
 
     solution = helmert_calc(input)
+    residuals = compute_residuals(input, solution)
     if not quiet:
-        print(json.dumps(solution, indent=4))
+        print("solution:", json.dumps(solution, indent=4))
+        print("residuals:", json.dumps(residuals, indent=4))
 
     if output_filename:
         res = input
         res["solution"] = solution
+        res["residuals"] = residuals
         with open(output_filename, "w") as output_f:
             json.dump(res, output_f, indent=4)
 

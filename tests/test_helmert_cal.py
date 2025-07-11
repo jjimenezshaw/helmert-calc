@@ -210,6 +210,19 @@ def test_mgi_ferro_to_etrs89_inverted(prime_meridian):
     assert params["s"] == pytest.approx(-2.4232, abs=0.001)
 
 
+def test_residuals():
+    input = mgi_ferro_to_etrs89()
+    input["source"]["pm"] = "ferro"
+    sol = hc.helmert_calc(input)
+    residuals = hc.compute_residuals(input, sol)
+    assert residuals["rms_2D"] < 2e-3
+    assert len(residuals["pipeline_2D"]) == 5
+    assert len(residuals["pipeline_3D"]) == 5
+    for j in range(0, 5):
+        for i in range(0, 3):
+            assert math.fabs(residuals["pipeline_3D"][j][i]) < 2e-3
+
+
 def test_cli():
     dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     runner = os.path.join(dir_path, "helmert_calc.py")
@@ -220,6 +233,7 @@ def test_cli():
         args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE
     )
     assert any("helmert" in str(x.strip()) for x in p.stdout)
+    assert any("residuals" in str(x.strip()) for x in p.stdout)
     assert p.wait() == 0
 
 
