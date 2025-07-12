@@ -6,6 +6,7 @@
         "ellipsoid": {
             "name": "bessel"
         },
+        "pm": "ferro",
         "points": [
             [
                 50.232619444,
